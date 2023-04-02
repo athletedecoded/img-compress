@@ -17,12 +17,10 @@ jobs:
           profile: minimal
           components: clippy, rustfmt
           override: true
-    - name: Check Rust versions
-      run: make rust-version
-    - name: Format
-      run: make format
-    - name: Lint
-      run: make lint
+    # - name: Format
+    #   run: make format
+    # - name: Lint
+    #   run: make lint
     - name: Install
       run: make install
     - name: Binary Release

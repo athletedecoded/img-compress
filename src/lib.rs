@@ -1,16 +1,12 @@
-use image::{
-    imageops::FilterType,
-    ImageFormat
-};
-use std::{
-    fmt, 
-    fs::{File, read_dir, metadata},
-    time::{Duration, Instant}
-};
-
+use image::{imageops::FilterType, ImageFormat};
 use lambda_runtime::Error;
 use rayon::prelude::*;
 use serde::Serialize;
+use std::{
+    fmt,
+    fs::{metadata, read_dir, OpenOptions},
+    time::{Duration, Instant},
+};
 
 struct Elapsed(Duration);
 
@@ -49,6 +45,7 @@ pub async fn walk_efs(dir_path: &str) -> Result<DirData, Error> {
     // Track total size and num of files
     let mut total_size = 0;
     // List all files in the directory
+    println!("Collecting filepaths in {}", dir_path);
     let mut files = Vec::new();
     for entry in read_dir(dir_path).unwrap() {
         let entry = entry.unwrap();
@@ -69,31 +66,78 @@ pub async fn walk_efs(dir_path: &str) -> Result<DirData, Error> {
     Ok(resp)
 }
 
-// Function to scale down all images in /mnt/efs
-pub async fn scale_down(files: Vec<String>, size: u32, filter: FilterType) -> Result<Response, Error> {
-    // Make subdir ./scaled-{size} if DNE
-    let subdir = format!("/mnt/efs/scaled-{}", size);
-    if !std::path::Path::new(&subdir).exists() {
-        std::fs::create_dir(&subdir).unwrap();
-    }
+// Function to scale down all images in /mnt/efs by scale_factor
+pub async fn scale_down(
+    root_dir: String,
+    scale_factor: u32,
+    filter: FilterType,
+) -> Result<Response, Error> {
+    // Walk efs
+    let walk = walk_efs(&root_dir).await?;
+    let files = walk.files;
+    let init_size = walk.size;
+
     // Start the clock
     let timer = Instant::now();
+
     // Parallelize the scaling of the images
+    println!("Running parallel down scaling of images...");
     files.par_iter().for_each(|fpath| {
         // extract filename from file path
-        let fname = fpath.split('/').last().unwrap();
         let img = image::open(fpath).unwrap();
-        let scaled = img.resize(size, size, filter);
-        let mut output = File::create(format!("{}/{}", &subdir, &fname)).unwrap();
-        scaled.write_to(&mut output, ImageFormat::Png).unwrap();
+        let (width, height) = image::image_dimensions(fpath).unwrap();
+        let scaled = img.resize(width / scale_factor, height / scale_factor, filter);
+        // Overwrite image file
+        let mut output = OpenOptions::new().write(true).truncate(true).open(fpath).unwrap();
+        scaled.write_to(&mut output, ImageFormat::Jpeg).unwrap();
     });
-    let resp_msg = format!("Scale down took {}", Elapsed::from(&timer));
     // Check size of scaled images
-    let new_size = walk_efs(&subdir).await.unwrap().size;
+    let new_size = walk_efs(&root_dir).await.unwrap().size;
     // Response
     let resp = Response {
-        time: resp_msg,
-        size: new_size,
+        time: format!("Scale down took {}", Elapsed::from(&timer)),
+        size: format!(
+            "Init dir size: {} --> Scaled dir size: {} .",
+            init_size, new_size
+        ),
+    };
+    Ok(resp)
+}
+
+// Function to scale up all images in /mnt/efs by scale_factor
+pub async fn scale_up(
+    root_dir: String,
+    scale_factor: u32,
+    filter: FilterType,
+) -> Result<Response, Error> {
+    // Walk efs
+    let walk = walk_efs(&root_dir).await?;
+    let files = walk.files;
+    let init_size = walk.size;
+
+    // Start the clock
+    let timer = Instant::now();
+
+    // Parallelize the scaling of the images
+    println!("Running parallel up scaling of images...");
+    files.par_iter().for_each(|fpath| {
+        // extract filename from file path
+        let img = image::open(fpath).unwrap();
+        let (width, height) = image::image_dimensions(fpath).unwrap();
+        let scaled = img.resize(width * scale_factor, height * scale_factor, filter);
+        // Overwrite image file
+        let mut output = OpenOptions::new().write(true).truncate(true).open(fpath).unwrap();
+        scaled.write_to(&mut output, ImageFormat::Jpeg).unwrap();
+    });
+    // Check size of scaled images
+    let new_size = walk_efs(&root_dir).await.unwrap().size;
+    // Response
+    let resp = Response {
+        time: format!("Scale up took {}", Elapsed::from(&timer)),
+        size: format!(
+            "Init dir size: {} --> Scaled dir size: {} .",
+            init_size, new_size
+        ),
     };
     Ok(resp)
 }

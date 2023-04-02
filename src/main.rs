@@ -1,48 +1,58 @@
-use lambda_runtime::{run, service_fn, Error, LambdaEvent};
 use image::imageops::FilterType;
-use serde::Deserialize;
 use img_comp::Response;
+use lambda_runtime::{run, service_fn, Error, LambdaEvent};
+use serde::Deserialize;
 
 #[derive(Deserialize)]
 struct Request {
-    scale: String,
+    dir: String,
+    scale_op: String,
+    scale_factor: u32,
     filter: String,
 }
 
 async fn function_handler(event: LambdaEvent<Request>) -> Result<Response, Error> {
+    let root_dir = format!("/mnt/efs/{}", event.payload.dir);
     // scale opts: "up", "down"
-    let scale = event.payload.scale;
+    let scale_op = event.payload.scale_op;
+    let scale_factor = event.payload.scale_factor;
     // filter opts
-    let filter = match event.payload.filter.as_str() {
-        "Nearest" => FilterType::Nearest,
-        "Triangle" => FilterType::Triangle,
-        "CatmullRom" => FilterType::CatmullRom,
-        "Lanczos3" => FilterType::Lanczos3,
+    let filter = match event.payload.filter.to_lowercase().as_str() {
+        "gauss" => FilterType::Gaussian,
+        "near" => FilterType::Nearest,
+        "tri" => FilterType::Triangle,
+        "cmr" => FilterType::CatmullRom,
+        "lcz" => FilterType::Lanczos3,
         _ => FilterType::Gaussian,
     };
-    // Walk efs
-    let walk = img_comp::walk_efs("/mnt/efs").await?;
-    let files = walk.files;
-    let init_size = walk.size;
 
     // Match the scaling case and return response
-    match scale.as_str() {
-        // "up" => {
-        //     img_comp::scale_up(files, 2, filter).await;
-        // }
+    match scale_op.as_str() {
+        "up" => {
+            println!(
+                "Scaling up by factor {} with filter {:?}",
+                scale_factor, filter
+            );
+            let resp = img_comp::scale_up(root_dir, scale_factor, filter).await?;
+            Ok(resp)
+        }
         "down" => {
-            let resp = img_comp::scale_down(files, 200, filter).await?;
+            println!(
+                "Scaling down by factor {} with filter {:?}",
+                scale_factor, filter
+            );
+            let resp = img_comp::scale_down(root_dir, scale_factor, filter).await?;
             Ok(resp)
         }
         _ => {
-            println!("Invalid scale option");
-            Ok(Response {
-                time: "ERROR: 0".to_string(),
-                size: init_size,
-            })
+            // Return error
+            let resp = Response {
+                time: "ERROR incorrect scale_op".to_string(),
+                size: "ERROR incorrect scale_op".to_string(),
+            };
+            Ok(resp)
         }
     }
-
 }
 
 #[tokio::main]

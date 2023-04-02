@@ -1,10 +1,28 @@
-![CI/CD Pipeline](https://github.com/athletedecoded/img-aug/actions/workflows/deploy.yml/badge.svg)
+![CI/CD Pipeline](https://github.com/athletedecoded/img-compress/actions/workflows/deploy.yml/badge.svg)
 
 # IDS721 Spring 2023 Project 4 - Image Compression for Big Data
 
-Image Compression for Big Data using EFS x Lambda x Rust
+Image Compression for Big Data using EFS x Lambda x Rust. Uses downsampling + filter to perform inplace image compression in parallel and reduce the memory cost of big image data storage. Currently accepts JPEG images only. Includes upsampling invocation option to restore image size.
+
+![image](./assets/img-comp.png)
 
 ## Useage
+
+```
+cargo lambda invoke --remote \
+    --data-ascii '{"dir": "imgs", "scale_op": "down", "scale_factor": 5, "filter": "Gaussian"}' \
+    --output-format json \
+    img-comp
+```
+
+where:
+
+* dir = subdirectory to perform compression on i.e. /mnt/efs/{dir}
+* scale_op = "down","up"
+* scale_factor = factor to scale width/height
+* filter = "gaussian" (default), "nearest", "triangle", "catmullrom", "lanczos3"
+
+## Developer Setup
 
 **Configure AWS IAM Permissions**
 
@@ -75,17 +93,18 @@ $ make deploy
   * Name = ImgComp
   * Description = Mangage img-comp lambda access
   * VPC = same as EFS (default)
-2. To enable EFS --> Lambda: click onnxLambda security group ID > edit inbound rules > Set: type = NFS, protocol = TCP, port range = 2049, source = custom > add the EFS security group ID (from the drop down box).
-2. To enable EFS --> Cloud9: click Cloud9 security group ID > edit inbound rules > Set: type = NFS, protocol = TCP, port range = 2049, source = custom > add the EFS security group ID (from the drop down box).
-3. To enable Lambda --> EFS and Cloud9 --> EFS: click EFS security group ID > edit inbound rules > add inbound rule for each:
-  * Set: type = NFS, protocol = TCP, port range = 2049, source = custom > add the EFS security group ID (from the drop down box)
+  * Save
+2. To enable EFS --> Lambda: click ImgComp security group ID > edit inbound rules > Set: type = NFS, protocol = TCP, port range = 2049, source = custom > add the EFS security group ID (from the drop down box)
+3. To enable EFS --> Cloud9: click Cloud9 security group ID > edit inbound rules > Set: type = NFS, protocol = TCP, port range = 2049, source = custom > add the EFS security group ID (from the drop down box).
+4. To enable Lambda & Cloud 9 --> EFS: click EFS security group ID > edit inbound rules > add inbound rule for each:
+  * Set: type = NFS, protocol = TCP, port range = 2049, source = custom > add the ImgComp security group ID (from the drop down box)
   * Set: type = NFS, protocol = TCP, port range = 2049, source = custom > add the Cloud9 security group ID (from the drop down box)
 
-**Configure Lambda for EFS**
+**Configure Lambda**
 
 1. Configuration > Permissions > edit execution role > select "EFSxLambda" from above
-2. Configuration > VPC > select default VPC (to match EFS)
-3. Configuration > VPC > edit security group to EFSxLambda
+2. Configuration > VPC > edit > select default VPC (to match EFS)
+3. Configuration > VPC > edit > select security group as ImgComp
 4. Configuration > File Systems > add EFS + access point + local mount path = /mnt/efs
 5. Configuration > Env Variables > LD_LIBRARY_PATH = /mnt/efs
 
@@ -102,22 +121,26 @@ sudo yum install -y amazon-efs-utils
 
 sudo mkdir -p /mnt/efs
 
-# From EFS > Attach > copy EFS helper command
+# From img-comp EFS > Attach > copy EFS helper command
 sudo mount -t efs -o tls <AWS_FS_ID>:/ /mnt/efs
 
 # Switch ownership permissions
 sudo chown ec2-user:ec2-user /mnt/efs
 sudo chmod 755 /mnt/efs
 
+# Copy local Cloud9 imgs directory to EFS
+cp -r imgs /mnt/efs
+
 # check files have been moved over
 cd /mnt/efs
 ls
 ```
 
-**Invoke from local dev environment**
-```
-make invoke
-```
+## Gotchas
+* Invokation failure may be insufficient lambda CPU/tmp storage that needs to be reconfigured for higher capacity
+
+## Future ToDos
+* [] Multiple file formats and error handling for non image data 
 
 ## References
 * [AWS EFS + Lambda Guide](https://aws.amazon.com/blogs/compute/using-amazon-efs-for-aws-lambda-in-your-serverless-applications/)

@@ -18,10 +18,4 @@ release-arm:
 deploy:
 	cargo lambda deploy
 
-invoke:
-	cargo lambda invoke --remote \
-  		--data-ascii '{"name": "onnx"}' \
-  		--output-format json \
-  		onnx-aws
-
 all: format lint test run
