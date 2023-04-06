@@ -2,7 +2,7 @@
 
 # IDS721 Spring 2023 Project 4 - Image Compression for Big Data
 
-Image Compression for Big Data using EFS x Lambda x Rust. Uses downsampling + filter to perform inplace image compression in parallel and reduce the memory cost of big image data storage. Currently accepts JPEG images only. Includes upsampling invocation option to restore image size.
+Image Compression for Big Data using EFS x Lambda x Rust. Uses downsampling + filter to perform inplace image compression in parallel and reduce the memory cost of big image data storage. Includes upsampling invocation option to restore image size.
 
 ![image](./assets/img-comp.png)
 
@@ -10,7 +10,7 @@ Image Compression for Big Data using EFS x Lambda x Rust. Uses downsampling + fi
 
 ```
 cargo lambda invoke --remote \
-    --data-ascii '{"dir": "imgs", "scale_op": "down", "scale_factor": 5, "filter": "Gaussian"}' \
+    --data-ascii '{"dir": "imgs", "scale_op": "down", "scale_factor": 2, "filter": "Gaussian"}' \
     --output-format json \
     img-comp
 ```
@@ -139,8 +139,6 @@ ls
 ## Gotchas
 * Invokation failure may be insufficient lambda CPU/tmp storage that needs to be reconfigured for higher capacity
 
-## Future ToDos
-* [] Multiple file formats and error handling for non image data 
 
 ## References
 * [AWS EFS + Lambda Guide](https://aws.amazon.com/blogs/compute/using-amazon-efs-for-aws-lambda-in-your-serverless-applications/)

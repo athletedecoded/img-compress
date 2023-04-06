@@ -85,11 +85,12 @@ pub async fn scale_down(
     files.par_iter().for_each(|fpath| {
         // extract filename from file path
         let img = image::open(fpath).unwrap();
+        let format = ImageFormat::from_path(fpath).unwrap();
         let (width, height) = image::image_dimensions(fpath).unwrap();
         let scaled = img.resize(width / scale_factor, height / scale_factor, filter);
         // Overwrite image file
         let mut output = OpenOptions::new().write(true).truncate(true).open(fpath).unwrap();
-        scaled.write_to(&mut output, ImageFormat::Jpeg).unwrap();
+        scaled.write_to(&mut output, format).unwrap();
     });
     // Check size of scaled images
     let new_size = walk_efs(&root_dir).await.unwrap().size;
@@ -123,11 +124,12 @@ pub async fn scale_up(
     files.par_iter().for_each(|fpath| {
         // extract filename from file path
         let img = image::open(fpath).unwrap();
+        let format = ImageFormat::from_path(fpath).unwrap();
         let (width, height) = image::image_dimensions(fpath).unwrap();
         let scaled = img.resize(width * scale_factor, height * scale_factor, filter);
         // Overwrite image file
         let mut output = OpenOptions::new().write(true).truncate(true).open(fpath).unwrap();
-        scaled.write_to(&mut output, ImageFormat::Jpeg).unwrap();
+        scaled.write_to(&mut output, format).unwrap();
     });
     // Check size of scaled images
     let new_size = walk_efs(&root_dir).await.unwrap().size;
